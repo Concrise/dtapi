@@ -188,7 +188,7 @@ func TestResponsesUploadsInlineFilesBeforeCompletion(t *testing.T) {
 	h := &openAITestSurface{Store: mockOpenAIConfig{}, Auth: streamStatusAuthStub{}, DS: ds}
 	r := chi.NewRouter()
 	registerOpenAITestRoutes(r, h)
-	reqBody := `{"model":"deepseek-v4-pro","input":[{"role":"user","content":[{"type":"input_text","text":"hi"},{"type":"input_image","image_url":{"url":"data:image/png;base64,QUJDRA=="}}]}],"stream":false}`
+	reqBody := `{"model":"deepseek-v4-vision","input":[{"role":"user","content":[{"type":"input_text","text":"hi"},{"type":"input_image","image_url":{"url":"data:image/png;base64,QUJDRA=="}}]}],"stream":false}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(reqBody))
 	req.Header.Set("Authorization", "Bearer direct-token")
 	req.Header.Set("Content-Type", "application/json")
@@ -202,12 +202,39 @@ func TestResponsesUploadsInlineFilesBeforeCompletion(t *testing.T) {
 	if len(ds.uploadCalls) != 1 {
 		t.Fatalf("expected 1 upload call, got %d", len(ds.uploadCalls))
 	}
-	if ds.uploadCalls[0].ModelType != "expert" {
-		t.Fatalf("expected expert model type for pro request, got %q", ds.uploadCalls[0].ModelType)
+	if ds.uploadCalls[0].ModelType != "vision" {
+		t.Fatalf("expected vision model type for vision request, got %q", ds.uploadCalls[0].ModelType)
 	}
 	refIDs, _ := ds.completionReq["ref_file_ids"].([]any)
 	if len(refIDs) != 1 || refIDs[0] != "file-inline-1" {
 		t.Fatalf("unexpected completion ref_file_ids: %#v", ds.completionReq["ref_file_ids"])
+	}
+}
+
+func TestResponsesRejectsInlineFilesForExpertModel(t *testing.T) {
+	ds := &inlineUploadDSStub{}
+	h := &openAITestSurface{Store: mockOpenAIConfig{}, Auth: streamStatusAuthStub{}, DS: ds}
+	r := chi.NewRouter()
+	registerOpenAITestRoutes(r, h)
+	reqBody := `{"model":"deepseek-v4-pro","input":[{"role":"user","content":[{"type":"input_text","text":"hi"},{"type":"input_image","image_url":{"url":"data:image/png;base64,QUJDRA=="}}]}],"stream":false}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer direct-token")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no upload calls for expert inline file request, got %d", len(ds.uploadCalls))
+	}
+	if ds.completionReq != nil {
+		t.Fatalf("did not expect completion call for rejected expert inline file request")
+	}
+	if !strings.Contains(rec.Body.String(), "expert mode does not support file uploads") {
+		t.Fatalf("expected expert file rejection message, got body=%s", rec.Body.String())
 	}
 }
 

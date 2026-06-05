@@ -50,6 +50,7 @@ func (d *responsesHistoryDS) DeleteAllSessionsForToken(context.Context, string) 
 }
 
 func TestResponsesRecordsResponseHistory(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{"keys":[],"accounts":[],"current_input_file":{"enabled":true,"min_chars":0}}`)
 	store, resolver := newDirectTokenResolver(t)
 	historyStore := chathistory.New(filepath.Join(t.TempDir(), "history.json"))
 	ds := &responsesHistoryDS{}
@@ -88,7 +89,7 @@ func TestResponsesRecordsResponseHistory(t *testing.T) {
 	if item.Surface != "openai.responses" {
 		t.Fatalf("unexpected surface: %q", item.Surface)
 	}
-	if !strings.Contains(item.UserInput, "Continue from the latest state in the attached DS2API_HISTORY.txt context.") {
+	if !strings.Contains(item.UserInput, "Continue from the latest state in the attached conversation_context.txt context.") {
 		t.Fatalf("unexpected user input: %q", item.UserInput)
 	}
 	if !strings.Contains(item.HistoryText, "hello responses") {

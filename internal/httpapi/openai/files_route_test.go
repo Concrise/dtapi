@@ -180,6 +180,24 @@ func TestFilesRouteUploadIncludesAccountIDForManagedAccount(t *testing.T) {
 	}
 }
 
+func TestFilesRouteRejectsExpertUpload(t *testing.T) {
+	ds := &filesRouteDSStub{}
+	h := &openAITestSurface{Store: mockOpenAIConfig{}, Auth: streamStatusAuthStub{}, DS: ds}
+	r := chi.NewRouter()
+	registerOpenAITestRoutes(r, h)
+
+	req := newMultipartUploadRequest(t, "assistants", "notes.txt", []byte("hello world"), "deepseek-v4-pro")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if ds.lastReq.Filename != "" {
+		t.Fatalf("expected no upload request for expert model, got %#v", ds.lastReq)
+	}
+}
+
 func TestFilesRouteRetrieveSuccess(t *testing.T) {
 	ds := &filesRouteDSStub{fetched: &dsclient.UploadFileResult{
 		ID:       "file-123",

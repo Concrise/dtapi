@@ -17,6 +17,7 @@ import (
 	"ds2api/internal/config"
 	claudefmt "ds2api/internal/format/claude"
 	"ds2api/internal/httpapi/openai/history"
+	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/httpapi/requestbody"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/responsehistory"
@@ -86,6 +87,10 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 	if err != nil {
 		status, message := mapCurrentInputFileError(err)
 		writeClaudeError(w, status, message)
+		return true
+	}
+	if err := shared.ValidateExpertFileRefs(stdReq); err != nil {
+		writeClaudeError(w, http.StatusBadRequest, err.Error())
 		return true
 	}
 	historySession := responsehistory.Start(responsehistory.StartParams{

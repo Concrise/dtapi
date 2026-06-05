@@ -16,6 +16,7 @@ import (
 	"ds2api/internal/auth"
 	"ds2api/internal/completionruntime"
 	"ds2api/internal/httpapi/openai/history"
+	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/httpapi/requestbody"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/responsehistory"
@@ -83,6 +84,10 @@ func (h *Handler) handleGeminiDirect(w http.ResponseWriter, r *http.Request, str
 	if err != nil {
 		status, message := mapCurrentInputFileError(err)
 		writeGeminiError(w, status, message)
+		return true
+	}
+	if err := shared.ValidateExpertFileRefs(stdReq); err != nil {
+		writeGeminiError(w, http.StatusBadRequest, err.Error())
 		return true
 	}
 	historySession := responsehistory.Start(responsehistory.StartParams{

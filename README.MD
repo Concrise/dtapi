@@ -93,7 +93,7 @@ flowchart LR
             DSClient["DeepSeek Client\n(Session / Auth / Completion / Files)"]
             Pow["PoW 实现\n(纯 Go)"]
             Tool["Tool Sieve\n(Go/Node 语义对齐)"]
-            History["Current Input File\n(DS2API_HISTORY.txt)"]
+            History["Current Input File\n(conversation_context.txt)"]
         end
     end
 
@@ -334,8 +334,8 @@ go run ./cmd/ds2api
 - `model_aliases`：OpenAI / Claude / Gemini 共用的模型 alias 映射。
 - `runtime`：账号并发、队列与 token 刷新策略，可通过 Admin Settings 热更新。
 - `auto_delete.mode`：请求结束后的远端会话清理策略，支持 `none` / `single` / `all`。
-- `current_input_file`：全局生效的上下文拆分上传策略；默认开启且阈值为 `0`，触发时将完整上下文合并上传为 `DS2API_HISTORY.txt` 上下文文件。
-- 如果关闭 `current_input_file`，请求会直接透传，不上传拆分上下文文件。
+- `current_input_file`：全局生效的上下文拆分上传策略；默认开启，达到阈值时会将完整上下文合并上传为 `conversation_context.txt` 上下文文件；Pro/专家模式会强制跳过该文件路径。
+- `current_input_file` 关闭时，请求会直接透传，不上传拆分上下文文件；Flash 保留文件上传长上下文能力。
 - `thinking_injection`：默认开启；在最新 user 消息末尾追加思考增强提示词，提高高强度推理与工具调用前的思考稳定性；`prompt` 留空时使用内置默认提示词。
 
 环境变量完整列表见 [部署指南](docs/DEPLOY.md)，接口鉴权规则见 [API.md](API.md#鉴权规则)。

@@ -1,7 +1,6 @@
 package responses
 
 import (
-	"ds2api/internal/toolcall"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -17,10 +16,12 @@ import (
 	"ds2api/internal/config"
 	dsprotocol "ds2api/internal/deepseek/protocol"
 	openaifmt "ds2api/internal/format/openai"
+	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/responsehistory"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
+	"ds2api/internal/toolcall"
 )
 
 func (h *Handler) GetResponseByID(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +93,10 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status, message := mapCurrentInputFileError(err)
 		writeOpenAIError(w, status, message)
+		return
+	}
+	if err := shared.ValidateExpertFileRefs(stdReq); err != nil {
+		writeOpenAIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

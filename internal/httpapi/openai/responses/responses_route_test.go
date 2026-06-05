@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -17,7 +18,9 @@ import (
 
 func newDirectTokenResolver(t *testing.T) (*config.Store, *auth.Resolver) {
 	t.Helper()
-	t.Setenv("DS2API_CONFIG_JSON", `{"keys":[],"accounts":[]}`)
+	if os.Getenv("DS2API_CONFIG_JSON") == "" {
+		t.Setenv("DS2API_CONFIG_JSON", `{"keys":[],"accounts":[]}`)
+	}
 	store := config.LoadStore()
 	pool := account.NewPool(store)
 	resolver := auth.NewResolver(store, pool, func(_ context.Context, _ config.Account) (string, error) {

@@ -12,6 +12,8 @@ func MapError(err error) (int, string) {
 		return http.StatusUnauthorized, "Account token is invalid. Please re-login the account in admin."
 	case dsclient.IsDirectUnauthorizedError(err):
 		return http.StatusUnauthorized, "Invalid token. If this should be a DS2API key, add it to config.keys first."
+	case dsclient.IsAccountMutedError(err):
+		return http.StatusTooManyRequests, err.Error()
 	default:
 		return http.StatusInternalServerError, err.Error()
 	}

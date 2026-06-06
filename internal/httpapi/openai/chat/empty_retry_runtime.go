@@ -144,6 +144,9 @@ func (h *Handler) prepareChatStreamRuntime(w http.ResponseWriter, resp *http.Res
 
 func (h *Handler) consumeChatStreamAttempt(r *http.Request, resp *http.Response, streamRuntime *chatStreamRuntime, initialType string, thinkingEnabled bool, historySession *chatHistorySession, allowDeferEmpty bool) (bool, bool) {
 	defer func() { _ = resp.Body.Close() }()
+	streamRuntime.finalErrorStatus = 0
+	streamRuntime.finalErrorMessage = ""
+	streamRuntime.finalErrorCode = ""
 	finalReason := "stop"
 	streamengine.ConsumeSSE(streamengine.ConsumeConfig{
 		Context:             r.Context(),
@@ -175,6 +178,13 @@ func (h *Handler) consumeChatStreamAttempt(r *http.Request, resp *http.Response,
 		},
 	})
 	if streamRuntime.finalErrorCode == string(streamengine.StopReasonContextCancelled) {
+		return true, false
+	}
+	if streamRuntime.finalErrorMessage != "" {
+		if allowDeferEmpty && streamRuntime.finalErrorStatus == http.StatusTooManyRequests {
+			return false, true
+		}
+		failChatStreamRetry(streamRuntime, historySession, streamRuntime.finalErrorStatus, streamRuntime.finalErrorMessage, streamRuntime.finalErrorCode)
 		return true, false
 	}
 	terminalWritten := streamRuntime.finalize(finalReason, allowDeferEmpty && finalReason != "content_filter")

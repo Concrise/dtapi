@@ -259,8 +259,22 @@ func (s *responsesStreamRuntime) onParsed(parsed sse.LineResult) streamengine.Pa
 	if parsed.ResponseMessageID > 0 {
 		s.responseMessageID = parsed.ResponseMessageID
 	}
-	if parsed.ContentFilter || parsed.ErrorMessage != "" {
+	if parsed.ContentFilter {
 		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReason("content_filter")}
+	}
+	if parsed.ErrorMessage != "" {
+		status := parsed.ErrorStatus
+		if status == 0 {
+			status = http.StatusBadGateway
+		}
+		code := strings.TrimSpace(parsed.ErrorCode)
+		if code == "" {
+			code = "upstream_error"
+		}
+		s.finalErrorStatus = status
+		s.finalErrorMessage = parsed.ErrorMessage
+		s.finalErrorCode = code
+		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReason("upstream_error")}
 	}
 	if parsed.Stop {
 		return streamengine.ParsedDecision{Stop: true}

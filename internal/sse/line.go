@@ -10,6 +10,8 @@ type LineResult struct {
 	Stop                       bool
 	ContentFilter              bool
 	ErrorMessage               string
+	ErrorStatus                int
+	ErrorCode                  string
 	Parts                      []ContentPart
 	ToolDetectionThinkingParts []ContentPart
 	NextType                   string
@@ -21,16 +23,31 @@ type LineResult struct {
 func ParseDeepSeekContentLine(raw []byte, thinkingEnabled bool, currentType string) LineResult {
 	chunk, done, parsed := ParseDeepSeekSSELine(raw)
 	if !parsed {
-		return LineResult{NextType: currentType}
+		chunk, parsed = ParseDeepSeekJSONLine(raw)
+		if !parsed {
+			return LineResult{NextType: currentType}
+		}
 	}
 	if done {
 		return LineResult{Parsed: true, Stop: true, NextType: currentType}
+	}
+	if upstreamErr, ok := ParseDeepSeekBusinessError(chunk); ok {
+		return LineResult{
+			Parsed:       true,
+			Stop:         true,
+			ErrorMessage: upstreamErr.Message,
+			ErrorStatus:  upstreamErr.Status,
+			ErrorCode:    upstreamErr.Code,
+			NextType:     currentType,
+		}
 	}
 	if errObj, hasErr := chunk["error"]; hasErr {
 		return LineResult{
 			Parsed:       true,
 			Stop:         true,
 			ErrorMessage: fmt.Sprintf("%v", errObj),
+			ErrorStatus:  DefaultUpstreamErrorStatus,
+			ErrorCode:    DefaultUpstreamErrorCode,
 			NextType:     currentType,
 		}
 	}

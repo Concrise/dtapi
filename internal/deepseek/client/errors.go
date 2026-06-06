@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type FailureKind string
@@ -11,6 +12,7 @@ const (
 	FailureUnknown             FailureKind = ""
 	FailureDirectUnauthorized  FailureKind = "direct_unauthorized"
 	FailureManagedUnauthorized FailureKind = "managed_unauthorized"
+	FailureAccountMuted        FailureKind = "account_muted"
 )
 
 type RequestFailure struct {
@@ -43,4 +45,14 @@ func IsManagedUnauthorizedError(err error) bool {
 func IsDirectUnauthorizedError(err error) bool {
 	var failure *RequestFailure
 	return errors.As(err, &failure) && failure.Kind == FailureDirectUnauthorized
+}
+
+func IsAccountMutedError(err error) bool {
+	var failure *RequestFailure
+	return errors.As(err, &failure) && failure.Kind == FailureAccountMuted
+}
+
+func isMutedFailure(msg string, bizMsg string) bool {
+	combined := strings.ToLower(strings.TrimSpace(msg + " " + bizMsg))
+	return strings.Contains(combined, "muted")
 }

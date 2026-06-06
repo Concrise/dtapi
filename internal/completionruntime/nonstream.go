@@ -254,6 +254,17 @@ func collectAttempt(resp *http.Response, stdReq promptcompat.StandardRequest, us
 		return assistantturn.Turn{}, &assistantturn.OutputError{Status: resp.StatusCode, Message: message, Code: "error"}
 	}
 	result := sse.CollectStream(resp, stdReq.Thinking, false)
+	if result.ErrorMessage != "" {
+		status := result.ErrorStatus
+		if status == 0 {
+			status = http.StatusBadGateway
+		}
+		code := strings.TrimSpace(result.ErrorCode)
+		if code == "" {
+			code = "upstream_error"
+		}
+		return assistantturn.Turn{}, &assistantturn.OutputError{Status: status, Message: result.ErrorMessage, Code: code}
+	}
 	return assistantturn.BuildTurnFromCollected(result, buildOptions(stdReq, usagePrompt, opts)), nil
 }
 

@@ -87,6 +87,10 @@ func (h *Handler) prepareResponsesStreamRuntime(w http.ResponseWriter, resp *htt
 
 func (h *Handler) consumeResponsesStreamAttempt(r *http.Request, resp *http.Response, streamRuntime *responsesStreamRuntime, initialType string, thinkingEnabled bool, allowDeferEmpty bool) (bool, bool) {
 	defer func() { _ = resp.Body.Close() }()
+	streamRuntime.finalErrorStatus = 0
+	streamRuntime.finalErrorMessage = ""
+	streamRuntime.finalErrorCode = ""
+	streamRuntime.failed = false
 	finalReason := "stop"
 	streamengine.ConsumeSSE(streamengine.ConsumeConfig{
 		Context:             r.Context(),
@@ -108,6 +112,13 @@ func (h *Handler) consumeResponsesStreamAttempt(r *http.Request, resp *http.Resp
 		},
 	})
 	if streamRuntime.finalErrorCode == string(streamengine.StopReasonContextCancelled) {
+		return true, false
+	}
+	if streamRuntime.finalErrorMessage != "" {
+		if allowDeferEmpty && streamRuntime.finalErrorStatus == http.StatusTooManyRequests {
+			return false, true
+		}
+		streamRuntime.failResponse(streamRuntime.finalErrorStatus, streamRuntime.finalErrorMessage, streamRuntime.finalErrorCode)
 		return true, false
 	}
 	terminalWritten := streamRuntime.finalize(finalReason, allowDeferEmpty && finalReason != "content_filter")

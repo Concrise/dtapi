@@ -313,7 +313,18 @@ func (s *chatStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedD
 		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}
 	}
 	if parsed.ErrorMessage != "" {
-		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReason("content_filter")}
+		status := parsed.ErrorStatus
+		if status == 0 {
+			status = http.StatusBadGateway
+		}
+		code := strings.TrimSpace(parsed.ErrorCode)
+		if code == "" {
+			code = "upstream_error"
+		}
+		s.finalErrorStatus = status
+		s.finalErrorMessage = parsed.ErrorMessage
+		s.finalErrorCode = code
+		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReason("upstream_error")}
 	}
 	if parsed.Stop {
 		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested}

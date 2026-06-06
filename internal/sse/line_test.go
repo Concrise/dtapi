@@ -19,6 +19,26 @@ func TestParseDeepSeekContentLineError(t *testing.T) {
 	}
 }
 
+func TestParseDeepSeekContentLineBusinessErrorDataLine(t *testing.T) {
+	res := ParseDeepSeekContentLine([]byte(`data: {"biz_code":5,"biz_msg":"user is muted"}`), false, "text")
+	if !res.Parsed || !res.Stop {
+		t.Fatalf("expected stop on business error: %#v", res)
+	}
+	if res.ErrorStatus != 429 || res.ErrorCode != "upstream_account_muted" {
+		t.Fatalf("expected account muted error, got status=%d code=%q message=%q", res.ErrorStatus, res.ErrorCode, res.ErrorMessage)
+	}
+}
+
+func TestParseDeepSeekContentLineBusinessErrorPlainJSON(t *testing.T) {
+	res := ParseDeepSeekContentLine([]byte(`{"code":0,"msg":"","data":{"biz_code":14,"biz_msg":"user is muted"}}`), false, "text")
+	if !res.Parsed || !res.Stop {
+		t.Fatalf("expected stop on plain JSON business error: %#v", res)
+	}
+	if res.ErrorStatus != 429 || res.ErrorCode != "upstream_account_muted" {
+		t.Fatalf("expected account muted error, got status=%d code=%q message=%q", res.ErrorStatus, res.ErrorCode, res.ErrorMessage)
+	}
+}
+
 func TestParseDeepSeekContentLineContentFilter(t *testing.T) {
 	res := ParseDeepSeekContentLine([]byte(`data: {"code":"content_filter"}`), false, "text")
 	if !res.Parsed || !res.Stop || !res.ContentFilter {

@@ -165,6 +165,53 @@ func TestExecuteNonStreamWithRetrySwitchesManagedAccountBeforeFinal429(t *testin
 	}
 }
 
+func TestExecuteNonStreamWithRetryDoesNotSwitchOnMutedAccount(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"keys":["managed-key"],
+		"accounts":[
+			{"email":"acc1@test.com","password":"pwd"},
+			{"email":"acc2@test.com","password":"pwd"}
+		]
+	}`)
+	store := config.LoadStore()
+	resolver := auth.NewResolver(store, account.NewPool(store), func(_ context.Context, acc config.Account) (string, error) {
+		return "token-" + acc.Identifier(), nil
+	})
+	req, _ := http.NewRequest(http.MethodPost, "/", nil)
+	req.Header.Set("Authorization", "Bearer managed-key")
+	a, err := resolver.Determine(req)
+	if err != nil {
+		t.Fatalf("determine failed: %v", err)
+	}
+	defer resolver.Release(a)
+
+	ds := &fakeDeepSeekCaller{
+		sessionByAccount: true,
+		responses: []*http.Response{
+			sseHTTPResponse(http.StatusOK, `data: {"biz_code":5,"biz_msg":"user is muted"}`),
+			sseHTTPResponse(http.StatusOK, `data: {"response_message_id":21,"p":"response/content","v":"should not be used"}`),
+		},
+	}
+	stdReq := promptcompat.StandardRequest{
+		Surface:         "test",
+		ResponseModel:   "deepseek-v4-flash",
+		PromptTokenText: "prompt",
+		FinalPrompt:     "final prompt",
+		Thinking:        true,
+	}
+
+	result, outErr := ExecuteNonStreamWithRetry(context.Background(), ds, a, stdReq, Options{RetryEnabled: true})
+	if outErr == nil {
+		t.Fatalf("expected muted account error, got result=%#v", result)
+	}
+	if outErr.Code != "upstream_account_muted" {
+		t.Fatalf("expected upstream_account_muted, got %#v", outErr)
+	}
+	if len(ds.completionAccounts) != 1 || ds.completionAccounts[0] != "acc1@test.com" {
+		t.Fatalf("expected no alternate account retry, got accounts=%v", ds.completionAccounts)
+	}
+}
+
 func TestExecuteNonStreamWithRetryReuploadsCurrentInputFileAfterAccountSwitch(t *testing.T) {
 	t.Setenv("DS2API_CONFIG_JSON", `{
 		"keys":["managed-key"],
@@ -275,6 +322,30 @@ func TestExecuteNonStreamWithRetryConvertsReferenceMarkers(t *testing.T) {
 	want := "答案[0](https://example.com/ref)。"
 	if result.Turn.Text != want {
 		t.Fatalf("text mismatch: got %q want %q", result.Turn.Text, want)
+	}
+}
+
+func TestStartCompletionRejectsOverLimitExpertPromptBeforeUpstreamCall(t *testing.T) {
+	ds := &fakeDeepSeekCaller{}
+	stdReq := promptcompat.StandardRequest{
+		Surface:         "test",
+		RequestedModel:  "deepseek-v4-pro",
+		ResolvedModel:   "deepseek-v4-pro",
+		ResponseModel:   "deepseek-v4-pro",
+		PromptTokenText: strings.Repeat("token ", 50000),
+		FinalPrompt:     "short live prompt",
+		Thinking:        true,
+	}
+
+	start, outErr := StartCompletion(context.Background(), ds, &auth.RequestAuth{}, stdReq, Options{})
+	if outErr == nil {
+		t.Fatalf("expected context limit error, got start=%#v", start)
+	}
+	if outErr.Status != http.StatusRequestEntityTooLarge || outErr.Code != "context_length_exceeded" {
+		t.Fatalf("unexpected context limit error: %#v", outErr)
+	}
+	if len(ds.payloads) != 0 {
+		t.Fatalf("expected no upstream completion calls, got %d", len(ds.payloads))
 	}
 }
 

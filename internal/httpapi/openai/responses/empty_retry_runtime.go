@@ -115,7 +115,7 @@ func (h *Handler) consumeResponsesStreamAttempt(r *http.Request, resp *http.Resp
 		return true, false
 	}
 	if streamRuntime.finalErrorMessage != "" {
-		if allowDeferEmpty && streamRuntime.finalErrorStatus == http.StatusTooManyRequests {
+		if allowDeferEmpty && streamRuntime.finalErrorStatus == http.StatusTooManyRequests && streamRuntime.finalErrorCode == "upstream_empty_output" {
 			return false, true
 		}
 		streamRuntime.failResponse(streamRuntime.finalErrorStatus, streamRuntime.finalErrorMessage, streamRuntime.finalErrorCode)

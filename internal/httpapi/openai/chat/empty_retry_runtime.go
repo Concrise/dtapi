@@ -181,7 +181,7 @@ func (h *Handler) consumeChatStreamAttempt(r *http.Request, resp *http.Response,
 		return true, false
 	}
 	if streamRuntime.finalErrorMessage != "" {
-		if allowDeferEmpty && streamRuntime.finalErrorStatus == http.StatusTooManyRequests {
+		if allowDeferEmpty && streamRuntime.finalErrorStatus == http.StatusTooManyRequests && streamRuntime.finalErrorCode == "upstream_empty_output" {
 			return false, true
 		}
 		failChatStreamRetry(streamRuntime, historySession, streamRuntime.finalErrorStatus, streamRuntime.finalErrorMessage, streamRuntime.finalErrorCode)

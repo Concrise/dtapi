@@ -15,6 +15,12 @@ import (
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/sse"
+	"ds2api/internal/util"
+)
+
+const (
+	expertPromptTokenLimit = 35000
+	upstreamEmptyOutput    = "upstream_empty_output"
 )
 
 type DeepSeekCaller interface {
@@ -56,6 +62,9 @@ func StartCompletion(ctx context.Context, ds DeepSeekCaller, a *auth.RequestAuth
 	stdReq, prepErr = prepareCurrentInputFile(ctx, ds, a, stdReq, opts)
 	if prepErr != nil {
 		return StartResult{Request: stdReq}, prepErr
+	}
+	if limitErr := validateExpertPromptBudget(stdReq); limitErr != nil {
+		return StartResult{Request: stdReq}, limitErr
 	}
 	sessionID, err := ds.CreateSession(ctx, a, maxAttempts)
 	if err != nil {
@@ -195,6 +204,9 @@ func canRetryOnAlternateAccount(ctx context.Context, a *auth.RequestAuth, outErr
 	if outErr == nil || outErr.Status != http.StatusTooManyRequests {
 		return false
 	}
+	if strings.TrimSpace(outErr.Code) != upstreamEmptyOutput {
+		return false
+	}
 	if !retryEnabled || attempted == nil || *attempted {
 		return false
 	}
@@ -203,6 +215,33 @@ func canRetryOnAlternateAccount(ctx context.Context, a *auth.RequestAuth, outErr
 	}
 	*attempted = true
 	return a.SwitchAccount(ctx)
+}
+
+func validateExpertPromptBudget(stdReq promptcompat.StandardRequest) *assistantturn.OutputError {
+	model := strings.TrimSpace(stdReq.ResolvedModel)
+	if model == "" {
+		model = strings.TrimSpace(stdReq.RequestedModel)
+	}
+	if !shared.IsExpertModel(model) {
+		return nil
+	}
+	promptText := stdReq.PromptTokenText
+	if promptText == "" {
+		promptText = stdReq.FinalPrompt
+	}
+	tokenModel := strings.TrimSpace(stdReq.ResponseModel)
+	if tokenModel == "" {
+		tokenModel = model
+	}
+	tokens := util.CountPromptTokens(promptText, tokenModel)
+	if tokens <= expertPromptTokenLimit {
+		return nil
+	}
+	return &assistantturn.OutputError{
+		Status:  http.StatusRequestEntityTooLarge,
+		Message: fmt.Sprintf("DeepSeek Pro/expert prompt is too long: estimated %d tokens, limit %d. Use Flash for file-backed long context or shorten the Pro request.", tokens, expertPromptTokenLimit),
+		Code:    "context_length_exceeded",
+	}
 }
 
 func startStandardCompletionOnAlternateAccount(ctx context.Context, ds DeepSeekCaller, a *auth.RequestAuth, stdReq promptcompat.StandardRequest, opts Options, maxAttempts int) (StartResult, *assistantturn.OutputError) {
